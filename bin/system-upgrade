@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+. ~/.dotfiles/bin/functions.sh
+
+update_repositories() {
+    # https://stackoverflow.com/questions/24628076/bash-convert-n-delimited-strings-into-array
+    # https://unix.stackexchange.com/questions/92187/setting-ifs-for-a-single-statement
+
+    # https://unix.stackexchange.com/questions/12902/how-to-run-find-exec
+    # https://stackoverflow.com/questions/27658675/how-to-remove-last-n-characters-from-a-string-in-bash
+
+    local GIT_REPOSITORIES
+    SAVEIFS=${IFS}
+    IFS=$'\n' GIT_REPOSITORIES=($(find . -type d -iname '*.git' -exec bash -c 'path_with_ext="{}"; path=${path_with_ext%/.*} && echo ${path}' \; | grep -v "./local\|^.$" | sort))
+
+    echo "Following git sub-repositories will be processed: ${GIT_REPOSITORIES[@]}"
+    local CURDIR; CURDIR=$(pwd)
+    local TIMEOUT=10s
+    for REPOSITORY in "${GIT_REPOSITORIES[@]}"
+    do
+      echo "Processing repository ${REPOSITORY}"
+      cd "${REPOSITORY}" && (
+      timeout --kill-after ${TIMEOUT} --signal=HUP ${TIMEOUT} git fetch --all && \
+      timeout --kill-after ${TIMEOUT} --signal=HUP ${TIMEOUT} git pull && \
+      timeout --kill-after ${TIMEOUT} --signal=HUP ${TIMEOUT} git submodule foreach 'git pull || :' >/dev/null 2>&1
+      )
+      cd "${CURDIR}"
+    done
+    IFS=${SAVEIFS}
+}
+
+cd ~/.dotfiles && update_repositories
+
+# zim update
+zsh -c 'source ~/.zshrc && zimfw upgrade && zimfw clean && zimfw compile'
+
+case $OSTYPE in
+linux*)
+  if is_sudo; then
+    sudo bash -c 'apt-get update && apt-get -yqq upgrade && apt-get clean all'
+    sudo chgrp -R brew /home/linuxbrew
+    sudo chmod -R g+w  /home/linuxbrew
+    sudo chgrp -R brew "$(brew --prefix)/"
+    sudo chmod -R g+w  "$(brew --prefix)/"
+    sudo chmod -R u+w  "$(brew --prefix)/"
+  fi
+  ;;
+esac
+
+# brew
+brew update
+brew upgrade
+
+PACKAGES=( \
+  mosh \
+  tmux \
+)
+for PACKAGE in "${PACKAGES[@]}"; do
+  brew_is_head_version "${PACKAGE}" && \
+  brew reinstall "${PACKAGE}" ; \
+  brew unlink "${PACKAGE}" ; \
+  brew link --overwrite "${PACKAGE}"
+done
+
+brew cleanup --prune all --verbose
+
+~/.dotfiles/bin/get-docker-compose

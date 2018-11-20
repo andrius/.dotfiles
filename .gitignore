@@ -1,0 +1,13 @@
+/local
+/private
+/private/
+
+/tmux/user.conf
+/tmux/plugins
+/tmux/data
+/tmux/resurrect
+/bin/pbcopy
+
+/config/nvim/config/user.vim
+
+/zsh/pure
